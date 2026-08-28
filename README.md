@@ -58,10 +58,10 @@ The forecast for a given day is calculated using the following sequential steps:
 
 4. **Weekend Boost:**
    If `workday_sensor` state is `off` (weekend/holiday):
-   $$\text{Weekend Factor} = 1.0 + W_{\text{weekend\_boost}}$$
+   $$\text{Weekend Factor} = 1.0 + W_{\text{weekend boost}}$$
 
 5. **Final Assembly & Bias Correction:**
-   $$\text{Raw Forecast} = (\text{Base Load} + \text{Solar Addition} + \text{Temperature Offset}) \times \text{Weekend Factor} \times W_{\text{bias\_correction}}$$
+   $$\text{Raw Forecast} = (\text{Base Load} + \text{Solar Addition} + \text{Temperature Offset}) \times \text{Weekend Factor} \times W_{\text{bias correction}}$$
 
 6. **Saturation Bounds (Min/Max Clamping):**
    To avoid extreme outliers, the output is restricted:
@@ -90,7 +90,7 @@ Every night at midnight (or upon day transition), the integration evaluates perf
 
 1. Open **HACS** in Home Assistant.
 2. Click the top-right menu (three dots) and select **Custom repositories**.
-3. Add the repository URL: `https://github.com/YOUR_USERNAME/house_consumption_forecaster`
+3. Add the repository URL: `https://github.com/WildeRNS/house_consumption_forecaster`
 4. Category: **Integration**.
 5. Click **Add**, find `House Consumption Forecaster` in the list, and click **Download**.
 6. Restart Home Assistant.
@@ -138,7 +138,7 @@ Each entity exposes learned model parameters in its state attributes:
 ---
 
 <p center>
-  <a href="#-house-consumption-adaptive-forecaster-for-home-assistant">⬆ Нагору к англійській версії / Back to English</a>
+  <a href="#-house-consumption-adaptive-forecaster-for-home-assistant">⬆ Нагору до англійської версії / Back to English</a>
 </p>
 
 # ⚡ Адаптивний прогнозист споживання електроенергії для Home Assistant
@@ -150,13 +150,13 @@ Each entity exposes learned model parameters in its state attributes:
 ---
 
 ## 📋 Зміст
-- [Можливості](#-можливості)
-- [Принцип роботи (Математична модель та автонавчання)](#-принцип-роботи-математична-модель-та-автонавчання)
-- [Встановлення](#-встановлення)
-  - [Спосіб 1: Через HACS (Рекомендовано)](#спосіб-1-через-hacs-рекомендовано)
-  - [Спосіб 2: Ручне встановлення](#спосіб-2-ручне-встановлення)
-- [Налаштування](#-налаштування)
-- [Сутності та атрибути](#-сутності-та-атрибути)
+- [Можливості](#-можливості-1)
+- [Принцип роботи (Математична модель та автонавчання)](#-принцип-роботи-математична-модель-та-автонавчання-1)
+- [Встановлення](#-встановлення-1)
+  - [Спосіб 1: Через HACS (Рекомендовано)](#спосіб-1-через-hacs-рекомендовано-1)
+  - [Спосіб 2: Ручне встановлення](#спосіб-2-ручне-встановлення-1)
+- [Налаштування](#-налаштування-1)
+- [Сутності та атрибути](#-сутності-та-атрибути-1)
 
 ---
 
@@ -193,10 +193,10 @@ Each entity exposes learned model parameters in its state attributes:
 
 4. **Коригування на вихідний день:**
    Якщо стан `workday_sensor` дорівнює `off` (вихідний/свято):
-   $$\text{Множник вихідного дня} = 1.0 + W_{\text{weekend\_boost}}$$
+   $$\text{Множник вихідного дня} = 1.0 + W_{\text{weekend boost}}$$
 
 5. **Підсумкова збірка та Bias-корекція:**
-   $$\text{Сирий прогноз} = (\text{Базове навантаження} + \text{Прирощення СЕС} + \text{Темп. корекція}) \times \text{Множник вихідного дня} \times W_{\text{bias\_correction}}$$
+   $$\text{Сирий прогноз} = (\text{Базове навантаження} + \text{Прирощення СЕС} + \text{Темп. корекція}) \times \text{Множник вихідного дня} \times W_{\text{bias correction}}$$
 
 6. **Сатурація (Межі безпеки):**
    Для виключення аномальних стрибків значення обмежується діапазоном:
@@ -211,7 +211,7 @@ Each entity exposes learned model parameters in its state attributes:
 1. Обчислюється відносна помилка вчорашнього прогнозу:
    $$\text{Відносна помилка} = \frac{\text{Факт вчора} - \text{Прогноз вчора}}{\text{Факт вчора}}$$
 2. Розраховується середня помилка (MAPE) та оновлюються ваги з коефіцієнтом навчання ($\eta = 0.05$):
-   - **Bias Correction (Основна зміщення):** $W_{\text{bias}} \leftarrow W_{\text{bias}} + \eta \times \text{Відносна помилка}$
+   - **Bias Correction (Основне зміщення):** $W_{\text{bias}} \leftarrow W_{\text{bias}} + \eta \times \text{Відносна помилка}$
    - **Коефіцієнт охолодження:** коригується, якщо температура перевищувала 24°C.
    - **Коефіцієнт опалення:** коригується, якщо температура була нижчою за 22°C.
    - **Буст вихідного дня:** коригується, якщо вчора був вихідний день.
@@ -225,7 +225,7 @@ Each entity exposes learned model parameters in its state attributes:
 
 1. Відкрийте **HACS** у вашому Home Assistant.
 2. Натисніть на три крапки у правому верхньому кутку та виберіть **Custom repositories** (Користувацькі репозиторії).
-3. Додайте URL репозиторію: `https://github.com/YOUR_USERNAME/house_consumption_forecaster`
+3. Додайте URL репозиторію: `https://github.com/WildeRNS/house_consumption_forecaster`
 4. Категорія: **Integration**.
 5. Натисніть **Add**, знайдіть `House Consumption Forecaster` у списку та натисніть **Download**.
 6. Перезапустіть Home Assistant.
