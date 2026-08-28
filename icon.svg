@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#03a9f4" />
+      <stop offset="100%" stop-color="#0288d1" />
+    </linearGradient>
+    <linearGradient id="houseGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#f0f4f8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Фон із заокругленими кутами -->
+  <rect width="256" height="256" rx="56" fill="url(#bgGrad)" />
+
+  <!-- Силует будинку -->
+  <path d="M128 52 L60 106 V192 C60 198.6 65.4 204 72 204 H184 C190.6 204 196 198.6 196 192 V106 Z" fill="url(#houseGrad)" />
+  <path d="M44 110 L128 44 L212 110 L196 124 L128 70 L60 124 Z" fill="#ffffff" opacity="0.9" />
+
+  <!-- Вікно / Графік всередині будинку -->
+  <rect x="96" y="125" width="64" height="52" rx="8" fill="#e1f5fe" />
+  
+  <!-- Лінія тренду / графіка -->
+  <path d="M104 160 L120 145 L136 152 L152 133" fill="none" stroke="#0288d1" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Енергетичний акцент (Блискавка / Сонце) -->
+  <circle cx="175" cy="85" r="22" fill="#ffb300" />
+  <path d="M173 70 L163 88 H177 L167 106" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
