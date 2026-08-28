@@ -97,9 +97,10 @@ Every night at midnight (or upon day transition), the integration evaluates perf
 
 ### Method 2: Manual Installation
 
-1. Download the latest source code.
-2. Copy the `house_consumption_forecaster` directory into your Home Assistant's `/config/custom_components/` directory.
-3. Restart Home Assistant.
+1. Download the latest release from the Releases page.
+2. Copy the `custom_components/house_consumption_forecaster` directory from the archive into your Home Assistant's `/config/custom_components/` directory.
+3. Your path should look like: `/config/custom_components/house_consumption_forecaster/manifest.json`
+4. Restart Home Assistant.
 
 ---
 
@@ -232,9 +233,10 @@ Each entity exposes learned model parameters in its state attributes:
 
 ### Спосіб 2: Ручне встановлення
 
-1. Завантажте вихідний код репозиторію.
-2. Скопіюйте папку `house_consumption_forecaster` у директорію `/config/custom_components/` вашого Home Assistant.
-3. Перезапустіть Home Assistant.
+1. Завантажте останній реліз зі сторінки Releases.
+2. Скопіюйте папку `house_consumption_forecaster` з директорії `custom_components` архіву у папку `/config/custom_components/` вашого Home Assistant.
+3. Шлях до файлів повинен мати вигляд: `/config/custom_components/house_consumption_forecaster/manifest.json`
+4. Перезапустіть Home Assistant.
 
 ---
 
