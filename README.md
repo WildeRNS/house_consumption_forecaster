@@ -10,13 +10,14 @@
 
 An adaptive custom integration for Home Assistant designed to accurately predict daily household energy consumption for **today** and **tomorrow**. 
 
-It uses a dynamic self-learning model that accounts for base electrical load, solar production impact (Solcast / Volcast), ambient temperature offsets, and workday/weekend consumption patterns.
+It uses a dynamic self-learning model that accounts for base electrical load (calculated via Exponential Moving Average), solar production impact (Solcast / Volcast), ambient temperature offsets, and workday/weekend consumption patterns.
 
 ---
 
 ## 📋 Table of Contents
 - [Features](#-features)
 - [How It Works (Mathematical & Learning Logic)](#-how-it-works-mathematical--learning-logic)
+- [Sensor Calibration Timeline](#-sensor-calibration-timeline)
 - [Installation](#-installation)
   - [Method 1: HACS (Recommended)](#method-1-hacs-recommended)
   - [Method 2: Manual Installation](#method-2-manual-installation)
@@ -28,6 +29,7 @@ It uses a dynamic self-learning model that accounts for base electrical load, so
 ## 🚀 Features
 
 - **Adaptive Self-Learning Engine:** Automatically compares yesterday's prediction against actual daily consumption at midnight and self-calibrates system coefficients using dynamic feedback loops.
+- **Historical EMA Baseline:** Uses Exponential Moving Average for daily historical baseline to ensure accurate morning reports (e.g., at 07:00) without dips caused by freshly reset daily counters.
 - **Solar Generation Factor:** Dynamically calculates house energy dependence on solar generation.
 - **HVAC & Weather Adjustment:** Automatically adjusts forecasts based on heating (< 22°C) or cooling (> 24°C) requirements.
 - **Weekend Load Boost:** Incorporates lifestyle changes on non-working days via Home Assistant's `workday` integration.
@@ -43,13 +45,13 @@ It uses a dynamic self-learning model that accounts for base electrical load, so
 
 The forecast for a given day is calculated using the following sequential steps:
 
-1. **Base Load Extraction:**
-   Extracted as 30% of average daily consumption, capped at a minimum safety threshold of 3.0 kWh:
-   $$\text{Base Load} = \max(\text{Daily Consumption} \times 0.3, 3.0)$$
+1. **Base Load Extraction (Historical EMA):**
+   Calculated as 30% of historical average daily consumption (tracked via Exponential Moving Average — EMA), ensuring early morning forecasts remain accurate and are not biased by low initial daily counter readings:
+   $$\text{Base Load} = \max(\text{Historic Daily Avg (EMA)} \times 0.3, 3.0)$$
 
 2. **Solar Factor Adjustment:**
    Calculates how much solar energy reduces grid/home energy reliance:
-   $$\text{Solar Factor} = \left( \frac{\text{Daily Consumption} - \text{Base Load}}{\max(\text{Solar Actual}, 1.0)} \right) \times W_{\text{solar}}$$
+   $$\text{Solar Factor} = \left( \frac{\text{Historic Daily Avg} - \text{Base Load}}{\max(\text{Solar Actual}, 1.0)} \right) \times W_{\text{solar}}$$
    $$\text{Solar Addition} = \text{Solar Forecast} \times \text{Solar Factor}$$
 
 3. **Temperature Offsets:**
@@ -65,7 +67,7 @@ The forecast for a given day is calculated using the following sequential steps:
 
 6. **Saturation Bounds (Min/Max Clamping):**
    To avoid extreme outliers, the output is restricted:
-   $$\text{Forecast} = \max(\text{Base Load}, \min(\text{Raw Forecast}, \text{Daily Consumption} \times 1.35))$$
+   $$\text{Forecast} = \max(\text{Base Load}, \min(\text{Raw Forecast}, \text{Historic Daily Avg} \times 1.35))$$
 
 ---
 
@@ -73,14 +75,26 @@ The forecast for a given day is calculated using the following sequential steps:
 
 Every night at midnight (or upon day transition), the integration evaluates performance:
 
-1. Computes relative error:
+1. Updates historical average daily consumption using Exponential Moving Average (EMA):
+   $$\text{EMA}_{\text{new}} = (\text{EMA}_{\text{old}} \times 0.8) + (\text{Actual Yesterday} \times 0.2)$$
+2. Computes relative error:
    $$\text{Relative Error} = \frac{\text{Actual Yesterday} - \text{Forecast Yesterday}}{\text{Actual Yesterday}}$$
-2. Calculates MAPE (Mean Absolute Percentage Error) and updates weights using a learning rate ($\eta = 0.05$):
+3. Calculates MAPE (Mean Absolute Percentage Error) and updates weights using a learning rate ($\eta = 0.05$):
    - **Bias Correction:** $W_{\text{bias}} \leftarrow W_{\text{bias}} + \eta \times \text{Relative Error}$
    - **Cooling Coeff:** Adjusted if temperature exceeded 24°C.
    - **Heating Coeff:** Adjusted if temperature dropped below 22°C.
    - **Weekend Boost:** Adjusted if yesterday was a non-working day.
-3. Automatically saves the updated weights to `/config/.storage/house_consumption_forecaster_learned_weights`.
+4. Automatically saves the updated weights to `/config/.storage/house_consumption_forecaster_learned_weights`.
+
+---
+
+## ⏱ Sensor Calibration Timeline
+
+The integration relies on a daily feedback loop at midnight to continuously calibrate its internal weights:
+
+* **Day 1 (First Midnight):** The integration performs its first actual vs. forecast comparison, updates the daily historical base average (EMA), and applies the initial bias correction ($W_{\text{bias}}$).
+* **Days 3–5 (Core Learning Phase):** Main adaptation period. The $W_{\text{bias}}$ multiplier and temperature weights converge toward your home's realistic average daily baseline (e.g., 8–10 kWh/day).
+* **1–2 Weeks (Full Stabilization):** Complete self-learning cycle. The model captures enough weekday/weekend transitions to fine-tune the `weekend_boost` multiplier and seasonal HVAC coefficients.
 
 ---
 
@@ -129,6 +143,7 @@ The integration creates two primary sensor entities:
 
 ### State Attributes:
 Each entity exposes learned model parameters in its state attributes:
+- `avg_daily_consumption`: Learned historic daily consumption baseline (in kWh).
 - `bias_correction`: Current multiplicative bias scale factor.
 - `temp_cool_coeff`: Cooling load adaptation multiplier.
 - `temp_heat_coeff`: Heating load adaptation multiplier.
@@ -146,13 +161,14 @@ Each entity exposes learned model parameters in its state attributes:
 
 Адаптивна кастомна інтеграція для Home Assistant, розроблена для точного прогнозування добового споживання електроенергії будинком на **сьогодні** та **завтра**.
 
-Інтеграція використовує динамічну модель з автонавчанням, яка враховує базове електричне навантаження, вплив сонячної генерації (Solcast / Volcast), температурну корекцію (опалення/охолодження) та різницю в профілі споживання між робочими та вихідними днями.
+Інтеграція використовує динамічну модель з автонавчанням, яка враховує базове електричне навантаження (на основі історичного EMA), вплив сонячної генерації (Solcast / Volcast), температурну корекцію (опалення/охолодження) та різницю в профілі споживання між робочими та вихідними днями.
 
 ---
 
 ## 📋 Зміст
 - [Можливості](#-можливості-1)
 - [Принцип роботи (Математична модель та автонавчання)](#-принцип-роботи-математична-модель-та-автонавчання-1)
+- [Терміни калібрування сенсорів](#-терміни-калібрування-сенсорів-1)
 - [Встановлення](#-встановлення-1)
   - [Спосіб 1: Через HACS (Рекомендовано)](#спосіб-1-через-hacs-рекомендовано-1)
   - [Спосіб 2: Ручне встановлення](#спосіб-2-ручне-встановлення-1)
@@ -164,6 +180,7 @@ Each entity exposes learned model parameters in its state attributes:
 ## 🚀 Можливості
 
 - **Адаптивний модуль самонавчання:** Щоночі о півночі порівнює вчорашній прогноз із фактичним добовим споживанням та самостійно коригує коефіцієнти системи за принципом зворотного зв'язку (Feedback Loop).
+- **Історичний базовий рівень (EMA):** Використовує експоненціально зважене середнє значення історичного споживання, що гарантує точність ранкових звітів (наприклад, о 07:00) без просідання через оновлений о півночі лічильник.
 - **Сонячний фактор:** Динамічно розраховує залежність споживання будинку від рівня сонячної генерації.
 - **Температурна компенсація:** Автоматично коригує прогноз залежно від потреби в охолодженні (> 24°C) або опаленні (< 22°C).
 - **Коригування на вихідні дні:** Враховує зміну побутового навантаження у неробочі дні за допомогою системного сенсора `workday`.
@@ -179,13 +196,13 @@ Each entity exposes learned model parameters in its state attributes:
 
 Розрахунок прогнозу здійснюється за такими послідовними кроками:
 
-1. **Розрахунок базового навантаження:**
-   Визначається як 30% від поточного добового споживання, але не менше 3.0 кВт·год:
-   $$\text{Базове навантаження} = \max(\text{Споживання} \times 0.3, 3.0)$$
+1. **Розрахунок базового навантаження (Історичний EMA):**
+   Розраховується як 30% від історичного середньодобового споживання (з використанням експоненціально зваженого середнього — EMA). Це гарантує точні ранкові прогнози (наприклад, о 07:00) без просідання через оновлений о півночі лічильник:
+   $$\text{Базове навантаження} = \max(\text{Історичне середнє (EMA)} \times 0.3, 3.0)$$
 
 2. **Врахування сонячного фактора:**
    Оцінюється рівень заміщення мережевого споживання власною генерацією СЕС:
-   $$\text{Сонячний фактор} = \left( \frac{\text{Споживання} - \text{Базове навантаження}}{\max(\text{Факт СЕС}, 1.0)} \right) \times W_{\text{solar}}$$
+   $$\text{Сонячний фактор} = \left( \frac{\text{Історичне середнє} - \text{Базове навантаження}}{\max(\text{Факт СЕС}, 1.0)} \right) \times W_{\text{solar}}$$
    $$\text{Прирощення СЕС} = \text{Прогноз СЕС} \times \text{Сонячний фактор}$$
 
 3. **Температурна корекція:**
@@ -201,7 +218,7 @@ Each entity exposes learned model parameters in its state attributes:
 
 6. **Сатурація (Межі безпеки):**
    Для виключення аномальних стрибків значення обмежується діапазоном:
-   $$\text{Фінальний прогноз} = \max(\text{Базове навантаження}, \min(\text{Сирий прогноз}, \text{Споживання} \times 1.35))$$
+   $$\text{Фінальний прогноз} = \max(\text{Базове навантаження}, \min(\text{Сирий прогноз}, \text{Історичне середнє} \times 1.35))$$
 
 ---
 
@@ -209,14 +226,26 @@ Each entity exposes learned model parameters in its state attributes:
 
 Щодня о півночі координатор здійснює перевірку та калібрування:
 
-1. Обчислюється відносна помилка вчорашнього прогнозу:
+1. Оновлює історичне середньодобове споживання за формулою експоненціального усереднення (EMA):
+   $$\text{EMA}_{\text{нов}} = (\text{EMA}_{\text{стар}} \times 0.8) + (\text{Факт вчора} \times 0.2)$$
+2. Обчислюється відносна помилка вчорашнього прогнозу:
    $$\text{Відносна помилка} = \frac{\text{Факт вчора} - \text{Прогноз вчора}}{\text{Факт вчора}}$$
-2. Розраховується середня помилка (MAPE) та оновлюються ваги з коефіцієнтом навчання ($\eta = 0.05$):
+3. Розраховується середня помилка (MAPE) та оновлюються ваги з коефіцієнтом навчання ($\eta = 0.05$):
    - **Bias Correction (Основне зміщення):** $W_{\text{bias}} \leftarrow W_{\text{bias}} + \eta \times \text{Відносна помилка}$
    - **Коефіцієнт охолодження:** коригується, якщо температура перевищувала 24°C.
    - **Коефіцієнт опалення:** коригується, якщо температура була нижчою за 22°C.
    - **Буст вихідного дня:** коригується, якщо вчора був вихідний день.
-3. Оновлені коефіцієнти автоматично перезаписуються у файл `/config/.storage/house_consumption_forecaster_learned_weights`.
+4. Оновлені коефіцієнти автоматично перезаписуються у файл `/config/.storage/house_consumption_forecaster_learned_weights`.
+
+---
+
+## ⏱ Терміни калібрування сенсорів
+
+Система працює на основі добового циклу зворотного зв'язку (Feedback Loop) о півночі, тому адаптація проходить у кілька етапів:
+
+* **1-ша доба (Перша північ):** Інтеграція вперше порівнює реальне споживання з прогнозом, оновлює експоненціальне середнє (EMA) та вносить першу правку в коефіцієнт зміщення ($W_{\text{bias}}$).
+* **3–5 днів (Основна фаза навчання):** Головний період адаптації. Коефіцієнт $W_{\text{bias}}$ та температурні ваги вирівнюються під реальний середній рівень споживання вашого будинку (наприклад, 8–10 кВт·год/день).
+* **1–2 тижні (Повна стабілізація):** Повний цикл автонавчання. Алгоритм захоплює декілька вихідних днів для точного калібрування множника `weekend_boost` та сезонних температурних коефіцієнтів.
 
 ---
 
@@ -265,6 +294,7 @@ Each entity exposes learned model parameters in its state attributes:
 
 ### Атрибути стану:
 Кожен сенсор містить у своїх атрибутах поточні навчені параметри моделі:
+- `avg_daily_consumption`: Навчене історичне середньодобове споживання будинку (у кВт·год).
 - `bias_correction`: Поточний мультиплікатор загального зміщення.
 - `temp_cool_coeff`: Коефіцієнт адаптації до навантаження охолодження.
 - `temp_heat_coeff`: Коефіцієнт адаптації до навантаження опалення.
