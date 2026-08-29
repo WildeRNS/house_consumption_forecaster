@@ -1,16 +1,13 @@
 """Initialize the House Consumption Forecaster integration."""
-from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 from .coordinator import AdaptiveForecasterCoordinator
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up integration from a config entry."""
-    # Об'єднуємо початкові data та нові options
-    config_data = {**entry.data, **entry.options}
-
-    coordinator = AdaptiveForecasterCoordinator(hass, config_data)
+    coordinator = AdaptiveForecasterCoordinator(hass, entry)
     await coordinator.async_init_store()
     await coordinator.async_config_entry_first_refresh()
 

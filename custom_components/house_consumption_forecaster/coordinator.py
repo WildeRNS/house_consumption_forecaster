@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -13,10 +14,10 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 
-class HouseConsumptionCoordinator(DataUpdateCoordinator):
+class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
     """Клас координатора для розрахунку прогнозу споживання будинку."""
 
-    def __init__(self, hass: HomeAssistant, entry: Any) -> None:
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Ініціалізація координатора."""
         super().__init__(
             hass,
@@ -30,6 +31,10 @@ class HouseConsumptionCoordinator(DataUpdateCoordinator):
         self._w_bias: float = 1.0
         self._avg_daily_consumption: float = 9.0  # Стартове середньодобове споживання (кВт·год)
         self._last_day: int = datetime.now().day
+
+    async def async_init_store(self) -> None:
+        """Ініціалізація збереження даних або зчитування збережених ваг."""
+        pass
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Оновлення даних та розрахунок прогнозів."""
