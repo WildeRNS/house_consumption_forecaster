@@ -3,7 +3,7 @@ DOMAIN = "house_consumption_forecaster"
 
 # Default learned parameters
 DEFAULT_WEIGHTS = {
-    "solar_weight": 1.0,        # Мультиплікатор сонячного фактора
+    "solar_weight": 0.15,        # Мультиплікатор сонячного фактора
     "temp_cool_coeff": 0.4,     # кВт·год/°C для спеки (>24°C)
     "temp_heat_coeff": 0.5,     # кВт·год/°C для холоду (<22°C)
     "weekend_boost": 0.12,      # 12% приріст на вихідні
