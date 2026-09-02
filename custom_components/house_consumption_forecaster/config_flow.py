@@ -10,7 +10,7 @@ from .const import (
     CONF_SOLAR_ACTUAL_SENSOR,
     CONF_SOLAR_FORECAST_TODAY,
     CONF_SOLAR_FORECAST_TOMORROW,
-    CONF_TEMP_SENSOR,
+    CONF_WEATHER_ENTITY,
     CONF_WORKDAY_SENSOR,
 )
 
@@ -22,7 +22,6 @@ class ForecasterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        """Get the options flow for this handler."""
         return ForecasterOptionsFlowHandler(config_entry)
 
     async def async_step_user(self, user_input=None):
@@ -34,7 +33,7 @@ class ForecasterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(CONF_SOLAR_ACTUAL_SENSOR): EntitySelector(EntitySelectorConfig(domain="sensor")),
             vol.Required(CONF_SOLAR_FORECAST_TODAY): EntitySelector(EntitySelectorConfig(domain="sensor")),
             vol.Required(CONF_SOLAR_FORECAST_TOMORROW): EntitySelector(EntitySelectorConfig(domain="sensor")),
-            vol.Required(CONF_TEMP_SENSOR): EntitySelector(EntitySelectorConfig(domain="sensor")),
+            vol.Required(CONF_WEATHER_ENTITY): EntitySelector(EntitySelectorConfig(domain="weather")), # Тепер тільки weather
             vol.Required(CONF_WORKDAY_SENSOR): EntitySelector(EntitySelectorConfig(domain="binary_sensor")),
         })
 
@@ -45,16 +44,12 @@ class ForecasterOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for changing configured sensors."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        # Використовуємо _config_entry замість config_entry
         self._config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
-        """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        # Отримуємо поточні значення
         current = {**self._config_entry.data, **self._config_entry.options}
 
         schema = vol.Schema({
@@ -75,9 +70,9 @@ class ForecasterOptionsFlowHandler(config_entries.OptionsFlow):
                 default=current.get(CONF_SOLAR_FORECAST_TOMORROW),
             ): EntitySelector(EntitySelectorConfig(domain="sensor")),
             vol.Required(
-                CONF_TEMP_SENSOR,
-                default=current.get(CONF_TEMP_SENSOR),
-            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
+                CONF_WEATHER_ENTITY,
+                default=current.get(CONF_WEATHER_ENTITY),
+            ): EntitySelector(EntitySelectorConfig(domain="weather")),
             vol.Required(
                 CONF_WORKDAY_SENSOR,
                 default=current.get(CONF_WORKDAY_SENSOR),

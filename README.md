@@ -28,11 +28,12 @@ It uses a dynamic self-learning model that accounts for base electrical load (ca
 
 ## 🚀 Features
 
+- **State Caching & Restart Protection:** Eliminates forecast drops during Home Assistant reboots by instantly recalling the last known valid states of unavailable sensors.
 - **Adaptive Self-Learning Engine:** Automatically compares yesterday's prediction against actual daily consumption at midnight and self-calibrates system coefficients using dynamic feedback loops.
 - **7-Day Historical Baseline:** Uses a strict 7-day rolling average to closely track your most recent baseline consumption, discarding outdated habits.
 - **Positive Solar Correlation:** Understands that excess solar generation acts as a *stimulus* for consumption (e.g., turning on boilers, washing machines). Higher solar forecasts dynamically increase the expected house consumption.
 - **Floor Clamping Protection:** The forecast for "Today" mathematically cannot drop below the energy your house has already consumed up to the current minute.
-- **HVAC & Weather Adjustment:** Automatically adjusts forecasts based on cooling (> 25°C) or heating (< 15°C) requirements.
+- **HVAC & Weather Adjustment:** Automatically adjusts forecasts based on cooling (> 25°C) or heating (< 15°C) requirements using daily weather forecast data.
 - **Weekend Load Boost:** Incorporates lifestyle changes on non-working days via Home Assistant's `workday` integration or standard calendar logic (+15% weekend boost).
 - **Anomaly Protection & Rate Limiting:** Clamps weight adaptations to a maximum step of $\pm 0.05$ per day alongside absolute boundaries to prevent single-day consumption anomalies from distorting the model.
 - **Persistent Weights Storage:** Learned weights and baseline statistics survive system restarts using Home Assistant's native Storage Helper (`Store`).
@@ -81,9 +82,9 @@ Every night at midnight (or upon date transition checked via ISO date tracking),
    $$\text{Relative Error} = \frac{\text{Actual Yesterday} - \text{Forecast Yesterday}}{\text{Actual Yesterday}}$$
 3. Updates weights using learning rate $\eta = 0.05$ with strict step limits ($\Delta \le \pm 0.05$):
    - **Bias Correction:** $W_{\text{bias}} \leftarrow W_{\text{bias}} + \text{clamp}(\eta \times \text{Relative Error}, -0.05, 0.05)$
-   - **Cooling Coeff ($W_{\text{cool}}$):** Adjusted if average temperature exceeded 25°C.
-   - **Heating Coeff ($W_{\text{heat}}$):** Adjusted if average temperature dropped below 15°C.
-   - **Solar Weight ($W_{\text{solar}}$):** Adjusted positively based on the ratio of forecast error to actual solar yield.
+   - **Cooling Coeff ($W_{\text{cool}}$):** Adjusted if the *true daily average* temperature exceeded 25°C.
+   - **Heating Coeff ($W_{\text{heat}}$):** Adjusted if the *true daily average* temperature dropped below 15°C.
+   - **Solar Weight ($W_{\text{solar}}$):** Adjusted positively based on the ratio of forecast error to the *daily maximum* actual solar yield (bypassing midnight inverter resets).
 4. **Global Boundary Enforcement:**
    $$W_{\text{bias}} \in [0.5, 1.5], \quad W_{\text{cool}} \in [0.0, 2.0], \quad W_{\text{heat}} \in [0.0, 3.0], \quad W_{\text{solar}} \in [0.0, 1.5]$$
 5. Automatically saves updated weights to `.storage/house_consumption_forecaster_<entry_id>_weights`.
@@ -129,7 +130,7 @@ The integration relies on a daily feedback loop at midnight to continuously cali
    - **Actual Solar Generation Sensor:** Cumulative daily PV generation sensor in kWh.
    - **Solar Forecast (Today):** Solcast / Volcast / Forecast.Solar expected daily generation sensor for today.
    - **Solar Forecast (Tomorrow):** Solcast / Volcast / Forecast.Solar expected daily generation sensor for tomorrow.
-   - **Temperature Sensor:** Outdoor ambient temperature or weather forecast entity.
+   - **Weather Entity:** Weather integration entity providing daily temperature forecasts for heating/cooling offsets (e.g., `weather.home`).
    - **Workday Binary Sensor:** Binary sensor determining workdays vs weekends (`binary_sensor.workday_sensor`).
 
 > 💡 **Need to change sensors later?** Click **Configure** on the integration card to open the **Options Flow** modal and update mappings anytime.
@@ -145,6 +146,7 @@ The integration creates a unified device named **House Energy Forecast** contain
 
 ### State Attributes:
 Each entity exposes learned model parameters in its state attributes:
+- `Internal 7-day avg`: Current rolling baseline average over 7 days.
 - `Learned solar weight`: Learned multiplicative factor for solar production impact.
 - `Learned temp cool coeff`: Cooling load adaptation coefficient (kWh/°C above 25°C).
 - `Learned temp heat coeff`: Heating load adaptation coefficient (kWh/°C below 15°C).
@@ -163,7 +165,7 @@ Each entity exposes learned model parameters in its state attributes:
 
 Адаптивна кастомна інтеграція для Home Assistant, розроблена для точного прогнозування добового споживання електроенергії будинком на **сьогодні** та **завтра**.
 
-Інтеграція використовує динамічну модель з автонавчанням, яка враховує базове електричне навантаження (на основі 7-денної історії), стимулюючий вплив сонячної генерації (додатна кореляція з Solcast / Volcast / Forecast.Solar), температурну корекцію (опалення/охолодження) та різницю в профілі споживання між робочими та вихідними днями.
+Інтеграція використовує динамічну модель з автонавчанням, яка враховує базове електричне навантаження (на основі 7-денної історії), стимулюючий вплив сонячної генерації (додатна кореляція з Solcast / Volcast / Forecast.Solar), температурну компенсацію (опалення/охолодження) та різницю в профілі споживання між робочими та вихідними днями.
 
 ---
 
@@ -181,11 +183,12 @@ Each entity exposes learned model parameters in its state attributes:
 
 ## 🚀 Можливості
 
+- **Кешування станів та захист від рестартів:** Усуває провали на графіках під час перезавантаження Home Assistant завдяки міттєвому підключенню останніх відомих станів для тимчасово недоступних сенсорів.
 - **Адаптивний модуль самонавчання:** Щоночі о півночі порівнює вчорашній прогноз із фактичним добовим споживанням та самостійно коригує коефіцієнти.
 - **7-денна історична база:** Замість безкінечного усереднення використовується масив за останні 7 днів для максимальної відповідності вашим поточним звичкам.
 - **Додатна кореляція з СЕС:** Розуміє, що наявність сонця стимулює використання додаткових приладів (бойлери, пралки). Чим вищий прогноз генерації, тим вищим буде прогноз споживання будинку.
 - **Захист від провалів (Floor Clamping):** Прогноз на "Сьогодні" математично не може впасти нижче того обсягу енергії, який ваш будинок *вже* спожив на поточну хвилину.
-- **Температурна компенсація:** Автоматично коригує прогноз залежно від потреби в охолодженні (> 25°C) або опаленні (< 15°C).
+- **Температурна компенсація:** Автоматично коригує прогноз на основі прогнозу добових температур погоди (охолодження > 25°C або опалення < 15°C), уникаючи хибних вранішніх стрибків.
 - **Коригування на вихідні дні:** Враховує зміну побутового навантаження у неробочі дні (+15% до бази).
 - **Захист від аномалій:** Обмежує добову зміну кожного коефіцієнта вектором $\pm 0.05$, що запобігає спотворенню моделі через випадкові сплески споживання.
 - **Збереження коефіцієнтів:** Навчені коефіцієнти зберігаються у внутрішній базі даних Home Assistant (`Store`).
@@ -232,7 +235,8 @@ Each entity exposes learned model parameters in its state attributes:
    $$\text{Відносна помилка} = \frac{\text{Факт вчора} - \text{Прогноз вчора}}{\text{Факт вчора}}$$
 3. Оновлюються ваги з коефіцієнтом навчання $\eta = 0.05$ та обмеженням максимального кроку ($\Delta \le \pm 0.05$):
    - **Bias Correction:** $W_{\text{bias}} \leftarrow W_{\text{bias}} + \text{clamp}(\eta \times \text{Відносна помилка}, -0.05, 0.05)$
-   - **Сонячна вага ($W_{\text{solar}}$):** коригується *у плюс* залежно від похибки відносно обсягу генерації СЕС.
+   - **Сонячна вага ($W_{\text{solar}}$):** Коригується в плюс залежно від похибки відносно *максимальної* зафіксованої генерації СЕС за день (захист від обнулення інверторів о півночі).
+   - **Температурні коефіцієнти ($W_{\text{cool}}$ / $W_{\text{heat}}$):** Адаптуються на основі обчисленої *середньодобової* температури, зібраної протягом усього дня.
 4. **Контроль допустимих меж:**
    $$W_{\text{bias}} \in [0.5, 1.5], \quad W_{\text{cool}} \in [0.0, 2.0], \quad W_{\text{heat}} \in [0.0, 3.0], \quad W_{\text{solar}} \in [0.0, 1.5]$$
 5. Оновлені коефіцієнти автоматично перезаписуються у файл `.storage`.
@@ -273,12 +277,12 @@ Each entity exposes learned model parameters in its state attributes:
 
 1. Перейдіть у **Налаштування** $\rightarrow$ **Пристрої та служби** (Devices & Services).
 2. Натисніть **Додати інтеграцію** та знайдіть **House Consumption Forecaster**.
-3. Оберіть ваші вхідні сутності:
+3. Оберіть вхідні сутності:
    - **Сенсор споживання будинку:** Накопичувальний сенсор споживання будинку за день у кВт·год (`sensor.daily_consumption`).
    - **Сенсор фактичної генерації СЕС:** Накопичувальний сенсор добової генерації СЕС у кВт·год.
    - **Прогноз СЕС (Сьогодні):** Сенсор очікуваної генерації на сьогодні від Solcast / Volcast / Forecast.Solar.
    - **Прогноз СЕС (Завтра):** Сенсор очікуваної генерації на завтра від Solcast / Volcast / Forecast.Solar.
-   - **Сенсор температури:** Сенсор зовнішньої температури або сутність прогнозу погоди.
+   - **Сутність погоди:** Сутність інтеграції погоди, що надає прогноз добових температур для розрахунку кліматичних оффсетів (наприклад, `weather.home`).
    - **Binary Sensor робочих днів:** Сенсор визначення робочих/вихідних днів (`binary_sensor.workday_sensor`).
 
 > 💡 **Змінилися сенсори?** Натисніть кнопку **Налаштувати** (Options) на картці інтеграції, щоб змінити прив'язку сутностей у будь-який момент.
@@ -293,7 +297,8 @@ Each entity exposes learned model parameters in its state attributes:
 2. `sensor.house_energy_forecast_tomorrow` — Прогнозоване споживання на завтра (у кВт·год).
 
 ### Атрибути стану:
-Кожен сенсор містить у своїх атрибутах поточні навчені параметри моделі:
+Кожен сенсор містить у своїх атрибутах актуальні параметри моделі:
+- `Internal 7-day avg`: Поточне плаваюче середнє за 7 днів.
 - `Learned solar weight`: Навчений коефіцієнт впливу сонячної генерації.
 - `Learned temp cool coeff`: Коефіцієнт адаптації до навантаження охолодження (кВт·год/°C понад 25°C).
 - `Learned temp heat coeff`: Коефіціент адаптації до навантаження опалення (кВт·год/°C нижче 15°C).

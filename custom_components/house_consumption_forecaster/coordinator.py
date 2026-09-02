@@ -16,7 +16,7 @@ from .const import (
     CONF_SOLAR_ACTUAL_SENSOR,
     CONF_SOLAR_FORECAST_TODAY,
     CONF_SOLAR_FORECAST_TOMORROW,
-    CONF_TEMP_SENSOR,
+    CONF_WEATHER_ENTITY,
     CONF_WORKDAY_SENSOR,
 )
 
@@ -27,7 +27,6 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
     """Клас координатора з логікою машинного навчання та постійним збереженням стану."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        """Ініціалізація координатора."""
         super().__init__(
             hass,
             _LOGGER,
@@ -37,11 +36,9 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
         self.entry = entry
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}_weights")
 
-        # Базові показники
         self._consumption_history: list[float] = [9.0]
         self._last_trained_date: str = ""
 
-        # Кешування для захисту від перезавантажень та опівнічного скидання
         self._daily_max_consumption: float = 0.0
         self._daily_max_solar: float = 0.0
         self._daily_temp_sum: float = 0.0
@@ -51,7 +48,6 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
         self._forecast_tomorrow_cache: float = 9.0
         self._last_known_states: dict[str, float] = {}
 
-        # Навчені коефіцієнти (Weights)
         self._w_bias: float = 1.0
         self._w_solar: float = 0.15
         self._w_temp_cool: float = 0.5
@@ -59,7 +55,6 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
         self._last_error_mape: float = 0.0
 
     async def async_init_store(self) -> None:
-        """Зчитування збережених даних."""
         data = await self._store.async_load()
         if data:
             self._w_bias = max(0.85, min(1.25, data.get("w_bias", 1.0)))
@@ -87,7 +82,6 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
                 self._consumption_history = [9.0]
 
     async def _async_save_store(self) -> None:
-        """Збереження поточного стану."""
         data = {
             "w_bias": self._w_bias,
             "w_solar": self._w_solar,
@@ -117,7 +111,6 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
         return sum(valid_history) / len(valid_history)
 
     def _get_sensor_value(self, entity_id: str | None) -> float | None:
-        """Отримання значення з фолбеком на останнє відоме."""
         if not entity_id:
             return None
         state = self.hass.states.get(entity_id)
@@ -128,9 +121,23 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
                 return val
             except ValueError:
                 pass
-        
-        # Якщо сенсор недоступний (наприклад, під час рестарту), беремо з кешу
         return self._last_known_states.get(entity_id)
+
+    def _get_weather_current_temp(self, entity_id: str | None) -> float | None:
+        """Отримує поточну температуру з атрибутів weather сутності."""
+        if not entity_id:
+            return None
+        state = self.hass.states.get(entity_id)
+        if state and state.state not in ("unknown", "unavailable"):
+            temp = state.attributes.get("temperature")
+            if temp is not None:
+                try:
+                    val = float(temp)
+                    self._last_known_states[entity_id + "_temp"] = val
+                    return val
+                except (ValueError, TypeError):
+                    pass
+        return self._last_known_states.get(entity_id + "_temp")
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
@@ -139,33 +146,25 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
 
             consumption_sensor = self._get_config_value(CONF_CONSUMPTION_SENSOR)
             solar_sensor = self._get_config_value(CONF_SOLAR_ACTUAL_SENSOR)
-            temp_sensor = self._get_config_value(CONF_TEMP_SENSOR)
+            weather_entity = self._get_config_value(CONF_WEATHER_ENTITY)
 
             current_consumption = self._get_sensor_value(consumption_sensor)
             current_solar = self._get_sensor_value(solar_sensor)
-            current_temp = self._get_sensor_value(temp_sensor)
+            current_temp = self._get_weather_current_temp(weather_entity)
 
             # Тренування на початку нової доби
             if self._last_trained_date != today_str:
                 if self._last_trained_date != "":
-                    # Передаємо накопичені за минулу добу дані
                     avg_temp = (self._daily_temp_sum / self._daily_temp_count) if self._daily_temp_count > 0 else 20.0
-                    await self._train_model(
-                        today_str, 
-                        self._daily_max_consumption, 
-                        self._daily_max_solar,
-                        avg_temp
-                    )
+                    await self._train_model(today_str, self._daily_max_consumption, self._daily_max_solar, avg_temp)
                 else:
                     self._last_trained_date = today_str
                 
-                # Скидання добових лічильників
                 self._daily_max_consumption = current_consumption or 0.0
                 self._daily_max_solar = current_solar or 0.0
                 self._daily_temp_sum = current_temp or 20.0
                 self._daily_temp_count = 1 if current_temp else 0
             else:
-                # Оновлення максимумів протягом дня
                 if current_consumption and current_consumption > self._daily_max_consumption:
                     self._daily_max_consumption = current_consumption
                 if current_solar and current_solar > self._daily_max_solar:
@@ -174,60 +173,82 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
                     self._daily_temp_sum += current_temp
                     self._daily_temp_count += 1
 
-            # Якщо дані критичного сенсора недоступні (рестарт HA), повертаємо кеш
             if current_consumption is None:
                 _LOGGER.debug("Сенсори недоступні, повернення кешованого прогнозу.")
                 is_weekend = self._is_weekend_or_holiday(now)
-                return {
-                    "forecast_today": self._current_forecast_cache,
-                    "forecast_tomorrow": self._forecast_tomorrow_cache,
-                    "avg_daily_consumption": round(self._avg_7d, 2),
-                    "learned_solar_weight": round(self._w_solar, 4),
-                    "learned_temp_cool_coeff": round(self._w_temp_cool, 4),
-                    "learned_temp_heat_coeff": round(self._w_temp_heat, 4),
-                    "learned_weekend_boost_pct": 15.0 if is_weekend else 0.0,
-                    "learned_bias_correction": round(self._w_bias, 3),
-                    "last_error_mape_pct": round(self._last_error_mape, 2),
-                }
+                return self._build_return_data(is_weekend)
+
+            # --- РОБОТА З ПРОГНОЗОМ ПОГОДИ (ЩОБ УНИКНУТИ СТРИБКІВ) ---
+            today_forecast_temp = current_temp
+            tomorrow_forecast_temp = current_temp
+
+            if weather_entity:
+                try:
+                    response = await self.hass.services.async_call(
+                        "weather", "get_forecasts", {"entity_id": weather_entity, "type": "daily"},
+                        blocking=True, return_response=True
+                    )
+                    if response and weather_entity in response:
+                        forecasts = response[weather_entity].get("forecast", [])
+                        if forecasts:
+                            # Прогноз на сьогодні (усереднюємо між мін і макс, або беремо макс)
+                            f_today = forecasts[0]
+                            t_high = f_today.get("temperature")
+                            t_low = f_today.get("templow")
+                            if t_high is not None and t_low is not None:
+                                today_forecast_temp = (t_high + t_low) / 2.0
+                            elif t_high is not None:
+                                today_forecast_temp = t_high
+
+                            # Прогноз на завтра
+                            if len(forecasts) > 1:
+                                f_tomorrow = forecasts[1]
+                                t_high_tmr = f_tomorrow.get("temperature")
+                                t_low_tmr = f_tomorrow.get("templow")
+                                if t_high_tmr is not None and t_low_tmr is not None:
+                                    tomorrow_forecast_temp = (t_high_tmr + t_low_tmr) / 2.0
+                                elif t_high_tmr is not None:
+                                    tomorrow_forecast_temp = t_high_tmr
+                except Exception as e:
+                    _LOGGER.debug("Не вдалося отримати daily прогноз погоди, використовуємо поточну температуру: %s", e)
 
             forecast_today = self._calculate_forecast_for_day(
-                is_tomorrow=False, current_consumption=current_consumption
+                is_tomorrow=False, current_consumption=current_consumption, target_temp=today_forecast_temp
             )
             forecast_tomorrow = self._calculate_forecast_for_day(
-                is_tomorrow=True
+                is_tomorrow=True, target_temp=tomorrow_forecast_temp
             )
 
             self._current_forecast_cache = forecast_today
             self._forecast_tomorrow_cache = forecast_tomorrow
-            
-            # Зберігаємо стан кожні 15 хвилин, щоб уникнути втрат при перезавантаженні
             await self._async_save_store()
 
             is_weekend = self._is_weekend_or_holiday(now)
-            return {
-                "forecast_today": forecast_today,
-                "forecast_tomorrow": forecast_tomorrow,
-                "avg_daily_consumption": round(self._avg_7d, 2),
-                "learned_solar_weight": round(self._w_solar, 4),
-                "learned_temp_cool_coeff": round(self._w_temp_cool, 4),
-                "learned_temp_heat_coeff": round(self._w_temp_heat, 4),
-                "learned_weekend_boost_pct": 15.0 if is_weekend else 0.0,
-                "learned_bias_correction": round(self._w_bias, 3),
-                "last_error_mape_pct": round(self._last_error_mape, 2),
-            }
+            return self._build_return_data(is_weekend)
 
         except Exception as err:
             _LOGGER.error("Помилка при розрахунку прогнозу споживання: %s", err)
             raise UpdateFailed(f"Помилка оновлення даних: {err}") from err
 
+    def _build_return_data(self, is_weekend: bool) -> dict[str, Any]:
+        return {
+            "forecast_today": self._current_forecast_cache,
+            "forecast_tomorrow": self._forecast_tomorrow_cache,
+            "avg_daily_consumption": round(self._avg_7d, 2),
+            "learned_solar_weight": round(self._w_solar, 4),
+            "learned_temp_cool_coeff": round(self._w_temp_cool, 4),
+            "learned_temp_heat_coeff": round(self._w_temp_heat, 4),
+            "learned_weekend_boost_pct": 15.0 if is_weekend else 0.0,
+            "learned_bias_correction": round(self._w_bias, 3),
+            "last_error_mape_pct": round(self._last_error_mape, 2),
+        }
+
     async def _train_model(self, today_str: str, actual_yesterday: float, max_solar_yesterday: float, avg_temp_yesterday: float) -> None:
-        """Логіка адаптивного навчання з виправленими зміщеннями."""
         if actual_yesterday > 4.0:
             self._consumption_history.append(actual_yesterday)
             if len(self._consumption_history) > 7:
                 self._consumption_history.pop(0)
 
-            # На момент виклику цієї функції (00:01) в кеші лежить фінальний прогноз з 23:45 вчорашнього дня
             predicted_yesterday = self._current_forecast_cache
             
             if predicted_yesterday > 0:
@@ -267,23 +288,22 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
                 return state.state == "off"
         return target_date.weekday() >= 5
 
-    def _calculate_forecast_for_day(self, is_tomorrow: bool = False, current_consumption: float | None = None) -> float:
+    def _calculate_forecast_for_day(self, is_tomorrow: bool = False, current_consumption: float | None = None, target_temp: float | None = None) -> float:
         base_limit = self._avg_7d * 0.85 
         target_date = datetime.now() + timedelta(days=1 if is_tomorrow else 0)
-
         estimated_total = self._avg_7d * self._w_bias
 
         if self._is_weekend_or_holiday(target_date):
             estimated_total *= 1.15
 
-        temp_sensor = self._get_config_value(CONF_TEMP_SENSOR)
-        current_temp = self._get_sensor_value(temp_sensor)
-        if current_temp is not None:
-            if current_temp > 25.0:
-                estimated_total += (current_temp - 25.0) * self._w_temp_cool
-            elif current_temp < 15.0:
-                estimated_total += (15.0 - current_temp) * self._w_temp_heat
+        # Температурна корекція на базі ОЧІКУВАНОЇ СЕРЕДНЬОЇ за добу (Вирішує баг з вранішніми стрибками)
+        if target_temp is not None:
+            if target_temp > 25.0:
+                estimated_total += (target_temp - 25.0) * self._w_temp_cool
+            elif target_temp < 15.0:
+                estimated_total += (15.0 - target_temp) * self._w_temp_heat
 
+        # Сонячна корекція (Solcast / Volcast ВЖЕ враховує сонячно чи хмарно у кВт·год)
         solar_key = CONF_SOLAR_FORECAST_TOMORROW if is_tomorrow else CONF_SOLAR_FORECAST_TODAY
         solar_sensor = self._get_config_value(solar_key)
         
