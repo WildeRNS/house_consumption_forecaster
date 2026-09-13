@@ -111,12 +111,11 @@ The integration relies on a daily feedback loop at midnight to continuously cali
 
 ### Method 1: HACS (Recommended)
 
-1. Open **HACS** in Home Assistant.
-2. Click the top-right menu (three dots) and select **Custom repositories**.
-3. Add the repository URL: `https://github.com/WildeRNS/house_consumption_forecaster`
-4. Category: **Integration**.
-5. Click **Add**, find `House Consumption Forecaster` in the list, and click **Download**.
-6. Restart Home Assistant.
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=WildeRNS&repository=house_consumption_forecaster&category=integration)
+
+1. Click the badge above (it opens HACS with this repository pre-filled as a custom repository), or add it manually: open **HACS** → menu (⋮) → **Custom repositories** → paste `https://github.com/WildeRNS/house_consumption_forecaster`, category **Integration**.
+2. Find `House Consumption Forecaster` in HACS and click **Download**.
+3. Restart Home Assistant.
 
 ### Method 2: Manual Installation
 
@@ -129,9 +128,10 @@ The integration relies on a daily feedback loop at midnight to continuously cali
 
 ## ⚙️ Configuration
 
-1. Go to **Settings** $\rightarrow$ **Devices & Services**.
-2. Click **Add Integration** and search for **House Consumption Forecaster**.
-3. Select your input entities:
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=house_consumption_forecaster)
+
+1. Click the badge above, or go to **Settings** $\rightarrow$ **Devices & Services** $\rightarrow$ **Add Integration** and search for **House Consumption Forecaster**.
+2. Select your input entities:
    - **Daily Consumption Sensor:** Cumulative house consumption sensor in kWh (`sensor.daily_consumption`).
    - **Actual Solar Generation Sensor:** Cumulative daily PV generation sensor in kWh.
    - **Solar Forecast (Today):** Solcast / Volcast / Forecast.Solar expected daily generation sensor for today.
@@ -293,12 +293,11 @@ Each entity exposes learned model parameters in its state attributes:
 
 ### Спосіб 1: Через HACS (Рекомендовано)
 
-1. Відкрийте **HACS** у вашому Home Assistant.
-2. Натисніть на три крапки у правому верхньому кутку та виберіть **Custom repositories** (Користувацькі репозиторії).
-3. Додайте URL репозиторію: `https://github.com/WildeRNS/house_consumption_forecaster`
-4. Категорія: **Integration**.
-5. Натисніть **Add**, знайдіть `House Consumption Forecaster` у списку та натисніть **Download**.
-6. Перезапустіть Home Assistant.
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=WildeRNS&repository=house_consumption_forecaster&category=integration)
+
+1. Натисніть кнопку вище (вона відкриє HACS одразу з цим репозиторієм, готовим до додавання як користувацький), або додайте вручну: відкрийте **HACS** → меню (⋮) → **Custom repositories** → вставте `https://github.com/WildeRNS/house_consumption_forecaster`, категорія **Integration**.
+2. Знайдіть `House Consumption Forecaster` у HACS і натисніть **Download**.
+3. Перезапустіть Home Assistant.
 
 ### Спосіб 2: Ручне встановлення
 
@@ -311,9 +310,10 @@ Each entity exposes learned model parameters in its state attributes:
 
 ## ⚙️ Налаштування
 
-1. Перейдіть у **Налаштування** $\rightarrow$ **Пристрої та служби** (Devices & Services).
-2. Натисніть **Додати інтеграцію** та знайдіть **House Consumption Forecaster**.
-3. Оберіть вхідні сутності:
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=house_consumption_forecaster)
+
+1. Натисніть кнопку вище, або перейдіть у **Налаштування** $\rightarrow$ **Пристрої та служби** $\rightarrow$ **Додати інтеграцію** та знайдіть **House Consumption Forecaster**.
+2. Оберіть вхідні сутності:
    - **Сенсор споживання будинку:** Накопичувальний сенсор споживання будинку за день у кВт·год (`sensor.daily_consumption`).
    - **Сенсор фактичної генерації СЕС:** Накопичувальний сенсор добової генерації СЕС у кВт·год.
    - **Прогноз СЕС (Сьогодні):** Сенсор очікуваної генерації на сьогодні від Solcast / Volcast / Forecast.Solar.
