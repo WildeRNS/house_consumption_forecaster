@@ -165,6 +165,11 @@ Each entity exposes learned model parameters in its state attributes:
 
 ## 🔄 Changelog
 
+### 1.3.0 — Configurable averaging window & faster catch-up
+- **Added a UI setting** ("Averaging Period (days)") to configure how many days of history feed the rolling consumption/solar average — no more editing code to change this. Default `10`, adjustable `3`–`30`, editable anytime via **Configure** on the integration card.
+- Up to `30` days of history are now stored internally regardless of the configured window, so changing the setting takes effect **instantly** instead of waiting to re-accumulate data.
+- **Widened the bias correction bounds** to a symmetric `±25%` (was `±15%`) — the previous range couldn't fully correct for a real, sustained drop in consumption faster than the averaging window itself could catch up, leaving a persistent gap between forecast and actual. Bounds remain symmetric in both directions.
+
 ### 1.2.0 — Overestimation fix
 - **Removed** the workday/weekend sensor and the entire weekend-boost logic.
 - **Bias correction is now symmetric** (`0.85–1.15`, was asymmetric `0.85–1.25`) — the model can no longer correct itself upward more easily than downward.
@@ -341,6 +346,11 @@ Each entity exposes learned model parameters in its state attributes:
 ---
 
 ## 🔄 Історія змін
+
+### 1.3.0 — Налаштовуваний період усереднення та швидше "наздоганяння"
+- **Додано налаштування в UI** ("Період усереднення (днів)") — тепер кількість днів історії, за якими рахується ковзне середнє споживання/сонця, змінюється без редагування коду. За замовчуванням `10`, діапазон `3`–`30`, можна змінити будь-коли через **Налаштувати** на картці інтеграції.
+- Внутрішньо тепер завжди зберігається до `30` днів історії незалежно від обраного періоду усереднення, тож зміна налаштування діє **миттєво**, без очікування накопичення нових днів.
+- **Розширено межі bias-корекції** до симетричних `±25%` (було `±15%`) — попередній діапазон не встигав повністю компенсувати реальне стійке падіння споживання швидше, ніж встигало зміститись саме ковзне середнє, через що зберігався помітний розрив між прогнозом і фактом. Межі лишаються симетричними в обидва боки.
 
 ### 1.2.0 — Виправлення завищення прогнозу
 - **Прибрано** сенсор вихідного/робочого дня та всю логіку вихідного приросту навантаження.

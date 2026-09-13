@@ -17,7 +17,11 @@ from .const import (
     CONF_SOLAR_FORECAST_TODAY,
     CONF_SOLAR_FORECAST_TOMORROW,
     CONF_WEATHER_ENTITY,
-    HISTORY_DAYS,
+    CONF_HISTORY_DAYS,
+    HISTORY_STORAGE_CAP,
+    DEFAULT_HISTORY_DAYS,
+    MIN_HISTORY_DAYS,
+    MAX_HISTORY_DAYS,
     MIN_VALID_CONSUMPTION,
     BIAS_MIN,
     BIAS_MAX,
@@ -48,25 +52,29 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
     """Координатор з логікою адаптивного самонавчання та збереженням стану.
 
     Модель прогнозу будується так:
-      1. База - середнє добове споживання будинку за останні HISTORY_DAYS днів
-         (наразі 10, див. const.py).
-      2. Bias-корекція - невеликий навчений мультиплікатор (+-15%), що
+      1. База - середнє добове споживання будинку за останні N днів, де N --
+         період усереднення, який користувач обирає в Options
+         (CONF_HISTORY_DAYS, за замовчуванням DEFAULT_HISTORY_DAYS). На
+         диску завжди зберігається до HISTORY_STORAGE_CAP днів історії,
+         тож зміна N в налаштуваннях діє миттєво, без очікування
+         накопичення нових днів.
+      2. Bias-корекція - невеликий навчений мультиплікатор (+-25%), що
          компенсує систематичну похибку моделі.
       3. Сонячна корекція - ВІДНОСНА: якщо прогноз генерації СЕС на
          конкретний день вищий за свій власний середній рівень за
-         розрахунковий період,
-         прогноз споживання пропорційно піднімається (сонячний день ->
-         більше активності/навантаження вдень), і навпаки для похмурих
-         днів. Це навмисно НЕ сира кВт*год-сума сонця, а коефіцієнт
-         відхилення від норми, помножений на частку від середнього
-         споживання -- так вага має сенс незалежно від розміру СЕС.
+         розрахунковий період, прогноз споживання пропорційно піднімається
+         (сонячний день -> більше активності/навантаження вдень), і
+         навпаки для похмурих днів. Це навмисно НЕ сира кВт*год-сума
+         сонця, а коефіцієнт відхилення від норми, помножений на частку
+         від середнього споживання -- так вага має сенс незалежно від
+         розміру СЕС.
       4. Температурна корекція - додаткове навантаження на
          охолодження/опалення, обмежене часткою від середнього
          споживання, щоб не могло домінувати над рештою моделі.
       5. Прогноз завжди обмежений жорсткими підлогою/стелею відносно
          середнього споживання за розрахунковий період (сан-чек), а для
-         "сьогодні"
-         додатково ніколи не може бути нижчим за вже фактично спожите.
+         "сьогодні" додатково ніколи не може бути нижчим за вже фактично
+         спожите.
     """
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -119,7 +127,7 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
 
             hist = data.get("consumption_history")
             if hist and isinstance(hist, list):
-                self._consumption_history = [x for x in hist if x >= MIN_VALID_CONSUMPTION][-HISTORY_DAYS:]
+                self._consumption_history = [x for x in hist if x >= MIN_VALID_CONSUMPTION][-HISTORY_STORAGE_CAP:]
                 if not self._consumption_history:
                     self._consumption_history = [9.0]
             else:
@@ -127,7 +135,7 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
 
             solar_hist = data.get("solar_history")
             if solar_hist and isinstance(solar_hist, list):
-                self._solar_history = [x for x in solar_hist if x >= 0][-HISTORY_DAYS:]
+                self._solar_history = [x for x in solar_hist if x >= 0][-HISTORY_STORAGE_CAP:]
             else:
                 self._solar_history = []
 
@@ -151,21 +159,35 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
         }
         await self._store.async_save(data)
 
-    def _get_config_value(self, key: str) -> str | None:
+    def _get_config_value(self, key: str) -> Any:
         return self.entry.options.get(key) or self.entry.data.get(key)
 
     @property
-    def _avg_7d(self) -> float:
-        """Середнє добове споживання будинку за останні HISTORY_DAYS днів."""
-        valid_history = [x for x in self._consumption_history if x >= MIN_VALID_CONSUMPTION]
+    def _history_days(self) -> int:
+        """Період усереднення (днів), обраний користувачем в Options."""
+        raw = self._get_config_value(CONF_HISTORY_DAYS)
+        if raw is None:
+            return DEFAULT_HISTORY_DAYS
+        try:
+            value = int(round(float(raw)))
+        except (TypeError, ValueError):
+            return DEFAULT_HISTORY_DAYS
+        return max(MIN_HISTORY_DAYS, min(MAX_HISTORY_DAYS, value))
+
+    @property
+    def _avg_period(self) -> float:
+        """Середнє добове споживання будинку за обраний користувачем період."""
+        n = self._history_days
+        valid_history = [x for x in self._consumption_history if x >= MIN_VALID_CONSUMPTION][-n:]
         if not valid_history:
             return 9.0
         return sum(valid_history) / len(valid_history)
 
     @property
-    def _avg_solar_7d(self) -> float:
-        """Середня фактична добова генерація СЕС за останні HISTORY_DAYS днів."""
-        valid = [x for x in self._solar_history if x >= 0]
+    def _avg_solar_period(self) -> float:
+        """Середня фактична добова генерація СЕС за обраний користувачем період."""
+        n = self._history_days
+        valid = [x for x in self._solar_history if x >= 0][-n:]
         if not valid:
             return 0.0
         return sum(valid) / len(valid)
@@ -290,8 +312,9 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
         return {
             "forecast_today": self._current_forecast_cache,
             "forecast_tomorrow": self._forecast_tomorrow_cache,
-            "avg_daily_consumption": round(self._avg_7d, 2),
-            "avg_daily_solar": round(self._avg_solar_7d, 2),
+            "avg_daily_consumption": round(self._avg_period, 2),
+            "avg_daily_solar": round(self._avg_solar_period, 2),
+            "history_days_used": self._history_days,
             "learned_solar_weight": round(self._w_solar, 4),
             "learned_temp_cool_coeff": round(self._w_temp_cool, 4),
             "learned_temp_heat_coeff": round(self._w_temp_heat, 4),
@@ -308,11 +331,11 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
     ) -> None:
         if actual_yesterday >= MIN_VALID_CONSUMPTION:
             self._consumption_history.append(actual_yesterday)
-            if len(self._consumption_history) > HISTORY_DAYS:
+            if len(self._consumption_history) > HISTORY_STORAGE_CAP:
                 self._consumption_history.pop(0)
 
             self._solar_history.append(max(0.0, max_solar_yesterday))
-            if len(self._solar_history) > HISTORY_DAYS:
+            if len(self._solar_history) > HISTORY_STORAGE_CAP:
                 self._solar_history.pop(0)
 
             predicted_yesterday = self._current_forecast_cache
@@ -322,12 +345,12 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
                 self._last_error_mape = (abs(error) / actual_yesterday) * 100.0
 
                 # Bias: невеликий щоденний крок, симетричні межі (BIAS_MIN..BIAS_MAX).
-                raw_bias_delta = (error / actual_yesterday) * 0.04
+                raw_bias_delta = (error / actual_yesterday) * 0.05
                 self._w_bias += max(-BIAS_MAX_DAILY_STEP, min(BIAS_MAX_DAILY_STEP, raw_bias_delta))
 
                 # Сонячна вага коригується, лише якщо є за чим порівнювати
                 # (є хоч якась історія сонячної генерації).
-                if self._avg_solar_7d > 0.5:
+                if self._avg_solar_period > 0.5:
                     solar_delta = (error / actual_yesterday) * 0.03
                     self._w_solar += max(-SOLAR_WEIGHT_MAX_DAILY_STEP, min(SOLAR_WEIGHT_MAX_DAILY_STEP, solar_delta))
 
@@ -358,11 +381,11 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
         current_consumption: float | None = None,
         target_temp: float | None = None,
     ) -> float:
-        avg_7d = self._avg_7d
-        estimated_total = avg_7d * self._w_bias
+        avg = self._avg_period
+        estimated_total = avg * self._w_bias
 
         # --- Температурна корекція, обмежена часткою від середнього ---
-        temp_cap = avg_7d * MAX_TEMP_EFFECT_RATIO
+        temp_cap = avg * MAX_TEMP_EFFECT_RATIO
         if target_temp is not None:
             if target_temp > 25.0:
                 temp_effect = (target_temp - 25.0) * self._w_temp_cool
@@ -373,15 +396,14 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
             temp_effect = max(-temp_cap, min(temp_cap, temp_effect))
             estimated_total += temp_effect
 
-        # --- Сонячна корекція: ВІДНОСНА до власного середнього за HISTORY_DAYS ---
+        # --- Сонячна корекція: ВІДНОСНА до власного середнього за період ---
         # Ідея: якщо прогноз генерації СЕС на цей день суттєво вищий за
         # звичний рівень -- будинок, ймовірно, споживатиме більше (більше
         # денної активності/навантаження), і навпаки для похмурого дня.
-        # На відміну від попередньої версії, тут НЕ додається сира кВт*год
-        # сонця -- натомість береться коефіцієнт відхилення від норми,
-        # помножений на частку (learned_solar_weight) від середнього
-        # споживання будинку. Це працює однаково передбачувано незалежно
-        # від розміру сонячної станції.
+        # НЕ додається сира кВт*год сонця -- натомість береться коефіцієнт
+        # відхилення від норми, помножений на частку (learned_solar_weight)
+        # від середнього споживання будинку. Це працює однаково
+        # передбачувано незалежно від розміру сонячної станції.
         solar_key = CONF_SOLAR_FORECAST_TOMORROW if is_tomorrow else CONF_SOLAR_FORECAST_TODAY
         solar_sensor = self._get_config_value(solar_key)
 
@@ -389,17 +411,17 @@ class AdaptiveForecasterCoordinator(DataUpdateCoordinator):
             solar_sensor = self._get_config_value(CONF_SOLAR_ACTUAL_SENSOR)
 
         solar_val = self._get_sensor_value(solar_sensor)
-        avg_solar = self._avg_solar_7d
+        avg_solar = self._avg_solar_period
 
         if solar_val is not None and avg_solar > 0.5:
             solar_ratio = solar_val / avg_solar
             solar_ratio = max(SOLAR_RATIO_MIN, min(SOLAR_RATIO_MAX, solar_ratio))
-            solar_effect = (solar_ratio - 1.0) * avg_7d * self._w_solar
+            solar_effect = (solar_ratio - 1.0) * avg * self._w_solar
             estimated_total += solar_effect
 
         # --- Захисні межі (сан-чек), симетричні відносно середнього ---
-        floor = avg_7d * FORECAST_FLOOR_RATIO
-        ceiling = avg_7d * FORECAST_CEILING_RATIO
+        floor = avg * FORECAST_FLOOR_RATIO
+        ceiling = avg * FORECAST_CEILING_RATIO
         final_forecast = max(floor, min(ceiling, estimated_total))
 
         # Прогноз на "сьогодні" ніколи не може бути нижчим за те, що вже

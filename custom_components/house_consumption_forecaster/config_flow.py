@@ -2,7 +2,13 @@
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
-from homeassistant.helpers.selector import EntitySelector, EntitySelectorConfig
+from homeassistant.helpers.selector import (
+    EntitySelector,
+    EntitySelectorConfig,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+)
 
 from .const import (
     DOMAIN,
@@ -11,7 +17,23 @@ from .const import (
     CONF_SOLAR_FORECAST_TODAY,
     CONF_SOLAR_FORECAST_TOMORROW,
     CONF_WEATHER_ENTITY,
+    CONF_HISTORY_DAYS,
+    DEFAULT_HISTORY_DAYS,
+    MIN_HISTORY_DAYS,
+    MAX_HISTORY_DAYS,
 )
+
+
+def _history_days_selector() -> NumberSelector:
+    return NumberSelector(
+        NumberSelectorConfig(
+            min=MIN_HISTORY_DAYS,
+            max=MAX_HISTORY_DAYS,
+            step=1,
+            mode=NumberSelectorMode.BOX,
+        )
+    )
+
 
 class ForecasterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for initial setup."""
@@ -33,6 +55,7 @@ class ForecasterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(CONF_SOLAR_FORECAST_TODAY): EntitySelector(EntitySelectorConfig(domain="sensor")),
             vol.Required(CONF_SOLAR_FORECAST_TOMORROW): EntitySelector(EntitySelectorConfig(domain="sensor")),
             vol.Required(CONF_WEATHER_ENTITY): EntitySelector(EntitySelectorConfig(domain="weather")),
+            vol.Optional(CONF_HISTORY_DAYS, default=DEFAULT_HISTORY_DAYS): _history_days_selector(),
         })
 
         return self.async_show_form(step_id="user", data_schema=schema)
@@ -71,6 +94,10 @@ class ForecasterOptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_WEATHER_ENTITY,
                 default=current.get(CONF_WEATHER_ENTITY),
             ): EntitySelector(EntitySelectorConfig(domain="weather")),
+            vol.Optional(
+                CONF_HISTORY_DAYS,
+                default=current.get(CONF_HISTORY_DAYS, DEFAULT_HISTORY_DAYS),
+            ): _history_days_selector(),
         })
 
         return self.async_show_form(step_id="init", data_schema=schema)

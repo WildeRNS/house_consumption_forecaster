@@ -14,7 +14,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, HISTORY_DAYS
+from .const import DOMAIN, DEFAULT_HISTORY_DAYS
 from .coordinator import AdaptiveForecasterCoordinator
 
 
@@ -74,8 +74,10 @@ class HouseConsumptionForecasterSensor(CoordinatorEntity, SensorEntity):
         if not self.coordinator.data:
             return {}
 
+        n_days = self.coordinator.data.get("history_days_used", DEFAULT_HISTORY_DAYS)
+
         return {
-            f"Internal {HISTORY_DAYS}-day avg": self.coordinator.data.get("avg_daily_consumption", 0.0),
+            f"Internal {n_days}-day avg": self.coordinator.data.get("avg_daily_consumption", 0.0),
             "Internal avg daily solar": self.coordinator.data.get("avg_daily_solar", 0.0),
             "Learned solar weight": self.coordinator.data.get("learned_solar_weight", 0.0),
             "Learned temp cool coeff": self.coordinator.data.get("learned_temp_cool_coeff", 0.0),

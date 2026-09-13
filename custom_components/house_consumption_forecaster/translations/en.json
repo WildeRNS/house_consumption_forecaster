@@ -9,14 +9,16 @@
           "solar_actual_sensor": "Actual Solar Generation Sensor",
           "solar_forecast_today": "Solar Forecast (Today)",
           "solar_forecast_tomorrow": "Solar Forecast (Tomorrow)",
-          "weather_entity": "Weather Entity"
+          "weather_entity": "Weather Entity",
+          "history_days": "Averaging Period (days)"
         },
         "data_description": {
           "consumption_sensor": "Historical / daily house energy consumption in kWh (cumulative daily total).",
           "solar_actual_sensor": "Daily actual solar production in kWh used to compute the solar dependence factor.",
           "solar_forecast_today": "Expected solar generation forecast for today from Solcast / Volcast.",
           "solar_forecast_tomorrow": "Expected solar generation forecast for tomorrow from Solcast / Volcast.",
-          "weather_entity": "Weather integration entity providing daily temperature forecasts for heating/cooling offsets."
+          "weather_entity": "Weather integration entity providing daily temperature forecasts for heating/cooling offsets.",
+          "history_days": "Number of most recent days used to compute the rolling consumption and solar averages. A smaller value (e.g. 5) reacts faster to recent changes in usage habits; a larger value (e.g. 14-21) gives a smoother, less noisy forecast. Defaults to 10."
         }
       }
     }
@@ -31,14 +33,16 @@
           "solar_actual_sensor": "Actual Solar Generation Sensor",
           "solar_forecast_today": "Solar Forecast (Today)",
           "solar_forecast_tomorrow": "Solar Forecast (Tomorrow)",
-          "weather_entity": "Weather Entity"
+          "weather_entity": "Weather Entity",
+          "history_days": "Averaging Period (days)"
         },
         "data_description": {
           "consumption_sensor": "Historical / daily house energy consumption in kWh (cumulative daily total).",
           "solar_actual_sensor": "Daily actual solar production in kWh used to compute the solar dependence factor.",
           "solar_forecast_today": "Expected solar generation forecast for today from Solcast / Volcast.",
           "solar_forecast_tomorrow": "Expected solar generation forecast for tomorrow from Solcast / Volcast.",
-          "weather_entity": "Weather integration entity providing daily temperature forecasts for heating/cooling offsets."
+          "weather_entity": "Weather integration entity providing daily temperature forecasts for heating/cooling offsets.",
+          "history_days": "Number of most recent days used to compute the rolling consumption and solar averages. A smaller value (e.g. 5) reacts faster to recent changes in usage habits; a larger value (e.g. 14-21) gives a smoother, less noisy forecast. Defaults to 10."
         }
       }
     }
